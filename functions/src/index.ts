@@ -1,16 +1,16 @@
+// Force redeployment again
+// Force redeployment
 import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
 import { GoogleGenAI, Type, Modality } from "@google/genai";
-import * as cors from "cors";
+import cors from "cors";
 
 // Initialize Firebase Admin SDK
 admin.initializeApp();
 const db = admin.firestore();
 
 // Initialize Gemini AI
-// FIX: The API key must be obtained from process.env.API_KEY as per the guidelines.
-// The API key is sourced from environment variables.
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
+const ai = new GoogleGenAI({project: "flashcard-e6edd"});
 
 // Types (should be kept in sync with frontend/types.ts)
 type Difficulty = "Beginner" | "Intermediate" | "Expert";
@@ -40,7 +40,7 @@ const _generateImageFromAPI = async (promptWord: string): Promise<string> => {
         });
 
         for (const part of response.candidates?.[0]?.content?.parts || []) {
-            if (part.inlineData) {
+            if (part.inlineData && part.inlineData.data) {
                 const base64ImageBytes: string = part.inlineData.data;
                 return `data:image/png;base64,${base64ImageBytes}`;
             }
@@ -83,6 +83,9 @@ const _generateFlashcardsFromAPI = async (
         },
     });
 
+    if (!response.text) {
+        throw new Error("Empty response from Gemini");
+    }
     const cardDescriptions = JSON.parse(response.text) as Omit<FlashcardData, "image">[];
     const imageGenerationPromises = cardDescriptions.map((card) => _generateImageFromAPI(card.word));
     const imageResults = await Promise.allSettled(imageGenerationPromises);
@@ -105,6 +108,8 @@ export const getFlashcardDeck = functions.https.onRequest((request, response) =>
             response.status(405).send("Method Not Allowed");
             return;
         }
+        functions.logger.info("Received request to getFlashcardDeck");
+
         try {
             const { sourceLang, targetLang, difficulty } = request.body;
             if (!sourceLang || !targetLang || !difficulty) {
@@ -127,6 +132,8 @@ export const getFlashcardDeck = functions.https.onRequest((request, response) =>
 
             await docRef.set({ cards: newFlashcards, createdAt: new Date() });
             functions.logger.info(`[CACHE SET] Saved new deck for ${cacheKey} to Firestore.`);
+            
+            functions.logger.info("Returning from getFlashcardDeck");
 
             response.status(200).json(newFlashcards);
         } catch (error) {
@@ -157,12 +164,12 @@ export const getSpeechAudio = functions.https.onRequest((request, response) => {
             const doc = await docRef.get();
 
             if (doc.exists) {
-                functions.logger.info(`[CACHE HIT] Found audio for "${text}"`);
+                functions.logger.info(`[CACHE HIT] Found audio for \"${text}\"`);
                 response.status(200).json({ audioContent: doc.data()?.audioContent });
                 return;
             }
 
-            functions.logger.info(`[CACHE MISS] No audio found for "${text}". Generating with Gemini...`);
+            functions.logger.info(`[CACHE MISS] No audio found for \"${text}\"". Generating with Gemini...`);
 
             const ttsResponse = await ai.models.generateContent({
                 model: "gemini-2.5-flash-preview-tts",
@@ -183,7 +190,7 @@ export const getSpeechAudio = functions.https.onRequest((request, response) => {
             }
 
             await docRef.set({ audioContent: base64Audio, createdAt: new Date() });
-            functions.logger.info(`[CACHE SET] Saved new audio for "${text}" to Firestore.`);
+            functions.logger.info(`[CACHE SET] Saved new audio for \"${text}\" to Firestore.`);
 
             response.status(200).json({ audioContent: base64Audio });
         } catch (error) {

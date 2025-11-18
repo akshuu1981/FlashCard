@@ -24,3 +24,5 @@ dist-ssr
 *.sw?
 .idx/dev.nix
 .env.local
+.firebase/
+functions/lib/
