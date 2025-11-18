@@ -98,8 +98,8 @@ const _generateFlashcardsFromAPI = async (
 };
 
 
-// FIX: Explicitly type request and response to ensure correct type inference from firebase-functions.
-export const getFlashcardDeck = functions.https.onRequest((request: functions.https.Request, response: functions.Response) => {
+// FIX: Removed explicit type annotations to allow TypeScript to infer correct Express types from functions.https.onRequest
+export const getFlashcardDeck = functions.https.onRequest((request, response) => {
     corsHandler(request, response, async () => {
         if (request.method !== "POST") {
             response.status(405).send("Method Not Allowed");
@@ -137,8 +137,8 @@ export const getFlashcardDeck = functions.https.onRequest((request: functions.ht
 });
 
 
-// FIX: Explicitly type request and response to ensure correct type inference from firebase-functions.
-export const getSpeechAudio = functions.https.onRequest((request: functions.https.Request, response: functions.Response) => {
+// FIX: Removed explicit type annotations to allow TypeScript to infer correct Express types from functions.https.onRequest
+export const getSpeechAudio = functions.https.onRequest((request, response) => {
     corsHandler(request, response, async () => {
         if (request.method !== "POST") {
             response.status(405).send("Method Not Allowed");
