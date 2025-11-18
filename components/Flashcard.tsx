@@ -33,6 +33,7 @@ const Flashcard: React.FC<FlashcardProps> = ({ cardData, isFlipped, onFlip, sour
       setAudioLoading(type);
       try {
           const base64Audio = await generateSpeech(text);
+          console.log("Audio size --", base64Audio.length);
           const ctx = getAudioContext();
           const audioBuffer = await decodeAudioData(
               decode(base64Audio),
@@ -64,9 +65,20 @@ const Flashcard: React.FC<FlashcardProps> = ({ cardData, isFlipped, onFlip, sour
       <div
         className={`relative w-full h-full transform-style-3d transition-transform duration-700 ${isFlipped ? 'rotate-y-180' : ''}`}
       >
-        {/* Front of the card */}
-        <div className={`${cardSideClasses} bg-white dark:bg-gray-800`}>
-          <div className="w-full h-2/3">
+        {/* Front of the card - shows the source language word for recall practice */}
+        <div className={`${cardSideClasses} bg-white dark:bg-gray-800 justify-center items-center p-6`}>
+            <div className="flex items-center gap-3 text-center">
+              <h2 className="text-4xl font-bold text-gray-800 dark:text-gray-200">{translation}</h2>
+              <button onClick={(e) => handleAudioButtonClick(e, translation, 'translation')} disabled={!!audioLoading} className="p-1 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 disabled:opacity-50 transition-colors">
+                  {audioLoading === 'translation' ? <SpinnerIcon className="w-7 h-7 text-primary-500"/> : <SpeakerIcon className="w-7 h-7 text-gray-500 dark:text-gray-400"/>}
+              </button>
+            </div>
+           <div className="absolute bottom-2 right-4 text-xs text-gray-400">{sourceLangName}</div>
+        </div>
+
+        {/* Back of the card - shows the target language word, image, sentence, and type */}
+        <div className={`${cardSideClasses} bg-primary-500 dark:bg-primary-700 text-white rotate-y-180`}>
+          <div className="w-full h-1/2">
             {image === 'no-image' ? (
               <PlaceholderImage />
             ) : (
@@ -75,31 +87,20 @@ const Flashcard: React.FC<FlashcardProps> = ({ cardData, isFlipped, onFlip, sour
           </div>
           <div className="p-4 flex-grow flex flex-col justify-center items-center text-center">
              <div className="flex items-center gap-2">
-                <h2 className="text-3xl font-bold text-primary-600 dark:text-primary-400">{word}</h2>
-                <button onClick={(e) => handleAudioButtonClick(e, word, 'word')} disabled={!!audioLoading} className="p-1 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 disabled:opacity-50 transition-colors">
-                    {audioLoading === 'word' ? <SpinnerIcon className="w-6 h-6 text-primary-500"/> : <SpeakerIcon className="w-6 h-6 text-gray-500 dark:text-gray-400"/>}
+                <h2 className="text-3xl font-bold">{word}</h2>
+                <button onClick={(e) => handleAudioButtonClick(e, word, 'word')} disabled={!!audioLoading} className="p-1 rounded-full hover:bg-white/20 disabled:opacity-50 transition-colors">
+                    {audioLoading === 'word' ? <SpinnerIcon className="w-6 h-6 text-white"/> : <SpeakerIcon className="w-6 h-6 text-white"/>}
                 </button>
             </div>
+            <span className="mt-2 px-3 py-1 bg-white/20 rounded-full text-sm font-semibold capitalize">{type}</span>
             <div className="flex items-center gap-2 mt-2">
-              <p className="text-gray-600 dark:text-gray-400 italic">"{sentence}"</p>
-               <button onClick={(e) => handleAudioButtonClick(e, sentence, 'sentence')} disabled={!!audioLoading} className="p-1 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 disabled:opacity-50 transition-colors">
-                    {audioLoading === 'sentence' ? <SpinnerIcon className="w-5 h-5 text-primary-500"/> : <SpeakerIcon className="w-5 h-5 text-gray-500 dark:text-gray-400"/>}
+              <p className="text-primary-100 italic">"{sentence}"</p>
+               <button onClick={(e) => handleAudioButtonClick(e, sentence, 'sentence')} disabled={!!audioLoading} className="p-1 rounded-full hover:bg-white/20 disabled:opacity-50 transition-colors">
+                    {audioLoading === 'sentence' ? <SpinnerIcon className="w-5 h-5 text-white"/> : <SpeakerIcon className="w-5 h-5 text-white"/>}
                 </button>
             </div>
           </div>
-           <div className="absolute bottom-2 right-4 text-xs text-gray-400">{targetLangName}</div>
-        </div>
-
-        {/* Back of the card */}
-        <div className={`${cardSideClasses} bg-primary-500 dark:bg-primary-700 text-white rotate-y-180 flex flex-col justify-center items-center text-center p-6`}>
-           <div className="flex items-center gap-3">
-              <h2 className="text-4xl font-bold">{translation}</h2>
-              <button onClick={(e) => handleAudioButtonClick(e, translation, 'translation')} disabled={!!audioLoading} className="p-1 rounded-full hover:bg-white/20 disabled:opacity-50 transition-colors">
-                  {audioLoading === 'translation' ? <SpinnerIcon className="w-7 h-7 text-white"/> : <SpeakerIcon className="w-7 h-7 text-white"/>}
-              </button>
-            </div>
-          <span className="mt-4 px-3 py-1 bg-white/20 rounded-full text-sm font-semibold capitalize">{type}</span>
-          <div className="absolute bottom-2 right-4 text-xs text-primary-200">{sourceLangName}</div>
+           <div className="absolute bottom-2 right-4 text-xs text-primary-200">{targetLangName}</div>
         </div>
       </div>
     </div>
