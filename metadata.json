@@ -1,0 +1,5 @@
+{
+  "name": "LingoFlip: AI Flashcards",
+  "description": "An AI-powered flashcard application to learn new languages. It generates words, sentences, and images tailored to your difficulty level.",
+  "requestFramePermissions": []
+}
