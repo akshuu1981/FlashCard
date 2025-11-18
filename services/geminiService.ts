@@ -1,113 +1,80 @@
-import { GoogleGenAI, Type, Modality } from "@google/genai";
-import { FlashcardData, Difficulty, GrammaticalType } from '../types';
+import { FlashcardData, Difficulty } from '../types';
 
-const API_KEY = process.env.API_KEY;
-if (!API_KEY) {
-    throw new Error("API_KEY environment variable not set");
-}
+// ======================================================================
+// Note: This service now acts as a client to our own backend API,
+// which is running as a Firebase Cloud Function. The actual calls to
+// the Gemini API and the caching logic now live securely on the server.
+// ======================================================================
 
-const ai = new GoogleGenAI({ apiKey: API_KEY });
-
-const generateImage = async (promptWord: string): Promise<string> => {
-    try {
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash-image',
-            contents: {
-                parts: [{ text: `A clean, simple, icon-style image of a ${promptWord}` }],
-            },
-            config: {
-                responseModalities: [Modality.IMAGE],
-            },
-        });
-
-        for (const part of response.candidates?.[0]?.content?.parts || []) {
-            if (part.inlineData) {
-                const base64ImageBytes: string = part.inlineData.data;
-                return `data:image/png;base64,${base64ImageBytes}`;
-            }
-        }
-        return 'no-image'; // Return placeholder if no image data found
-    } catch (error) {
-        console.error("Error generating image:", error);
-        return 'no-image'; // Return placeholder on error
-    }
-};
-
-
+/**
+ * Fetches a deck of flashcards from our backend service.
+ * The backend will either retrieve it from its Firestore cache or generate a new one.
+ * @param sourceLang The source language name (e.g., "English").
+ * @param targetLang The target language name (e.g., "French").
+ * @param difficulty The selected difficulty level.
+ * @returns A promise that resolves to an array of FlashcardData.
+ */
 export const generateFlashcards = async (
     sourceLang: string,
     targetLang: string,
     difficulty: Difficulty
 ): Promise<FlashcardData[]> => {
-    
-    const prompt = `Generate 10 flashcards for a user learning ${targetLang} from ${sourceLang} at a ${difficulty} level. For each flashcard, provide the word in ${targetLang}, its ${sourceLang} translation, its grammatical type (noun, verb, or adjective), and a simple example sentence in ${targetLang} using the word. The output must be a JSON array of objects.`;
-
-    const schema = {
-        type: Type.ARRAY,
-        items: {
-            type: Type.OBJECT,
-            properties: {
-                word: { type: Type.STRING, description: `The word in ${targetLang}` },
-                translation: { type: Type.STRING, description: `The English translation of the word.` },
-                type: { type: Type.STRING, description: 'The grammatical type: "noun", "verb", or "adjective".' },
-                sentence: { type: Type.STRING, description: `An example sentence in ${targetLang} using the word.` }
-            },
-            required: ['word', 'translation', 'type', 'sentence']
-        }
-    };
-
+    console.log(`Requesting deck from backend: ${sourceLang} -> ${targetLang} (${difficulty})`);
     try {
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: prompt,
-            config: {
-                responseMimeType: 'application/json',
-                responseSchema: schema,
+        // The '/api/getFlashcardDeck' path is rewritten by firebase.json to the cloud function.
+        const response = await fetch('/api/getFlashcardDeck', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
             },
+            body: JSON.stringify({ sourceLang, targetLang, difficulty }),
         });
 
-        const cardDescriptions = JSON.parse(response.text) as Omit<FlashcardData, 'image'>[];
+        if (!response.ok) {
+            const errorBody = await response.text();
+            throw new Error(`Failed to fetch flashcards from server: ${response.status} ${errorBody}`);
+        }
+        
+        const data = await response.json();
+        console.log("Received deck from backend.");
+        return data as FlashcardData[];
 
-        const imageGenerationPromises = cardDescriptions.map(card => generateImage(card.word));
-        const imageResults = await Promise.allSettled(imageGenerationPromises);
-
-        const flashcards: FlashcardData[] = cardDescriptions.map((card, index) => {
-            const imageResult = imageResults[index];
-            return {
-                ...card,
-                type: card.type.toLowerCase() as GrammaticalType,
-                image: imageResult.status === 'fulfilled' ? imageResult.value : 'no-image',
-            };
-        });
-
-        return flashcards;
     } catch (error) {
-        console.error("Error generating flashcards:", error);
-        throw new Error("Failed to generate flashcards. Please check your API key and try again.");
+        console.error("Error communicating with backend service:", error);
+        throw new Error("Could not connect to the server to get flashcards. Please try again later.");
     }
 };
 
+
+/**
+ * Fetches a base64 encoded audio string for a given text from our backend service.
+ * The backend will either retrieve it from its Firestore cache or generate a new one.
+ * @param text The text to be converted to speech.
+ * @returns A promise that resolves to a base64 encoded audio string.
+ */
 export const generateSpeech = async (text: string): Promise<string> => {
-    try {
-        const response = await ai.models.generateContent({
-            model: "gemini-2.5-flash-preview-tts",
-            contents: [{ parts: [{ text }] }],
-            config: {
-                responseModalities: [Modality.AUDIO],
-                speechConfig: {
-                    voiceConfig: {
-                        prebuiltVoiceConfig: { voiceName: 'Kore' },
-                    },
-                },
+    console.log(`Requesting audio for "${text}" from backend...`);
+     try {
+        // The '/api/getSpeechAudio' path is rewritten by firebase.json to the cloud function.
+        const response = await fetch('/api/getSpeechAudio', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
             },
+            body: JSON.stringify({ text }),
         });
-        const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-        if (!base64Audio) {
-            throw new Error("No audio data received from API.");
+
+        if (!response.ok) {
+            const errorBody = await response.text();
+            throw new Error(`Failed to fetch speech from server: ${response.status} ${errorBody}`);
         }
-        return base64Audio;
+
+        const { audioContent } = await response.json();
+        console.log(`Received audio for "${text}" from backend.`);
+        return audioContent;
+
     } catch (error) {
-        console.error("Error generating speech:", error);
-        throw new Error("Failed to generate speech.");
+        console.error("Error communicating with speech service:", error);
+        throw new Error("Could not connect to the server to get audio.");
     }
 };
